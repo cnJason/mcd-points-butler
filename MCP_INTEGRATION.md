@@ -23,6 +23,8 @@
 | `auto-bind-coupons` | 领取（低风险） | 一键领取全部可领券，仅在显式传 `--claim` 或点击页面按钮时调用 | `cmd_coupons --claim` / `POST /api/coupons/claim` |
 | `query-my-coupons` | 查询 | 卡包内已领取券列表（校验领取结果、展示卡包张数） | `GET /api/my-coupons` |
 | `mall-points-products` | 查询 | 积分商城可兑换商品列表（SPU 级） | `cmd_mall` / `cmd_report` |
+| `mall-product-detail` | 查询 | SPU 详情与 SKU 列表（拿 `skuId`、`spuCategory`、使用须知） | `cmd_detail` / `GET /api/mall/detail` |
+| `mall-create-order` | 写（用户确认后） | 创建积分兑换订单，仅 `shopId=2`；`spuCategory=1` 虚拟券、`2` 实体 | `cmd_redeem --yes` / `POST /api/mall/redeem` |
 | `now-time-info` | 查询 | 服务器时间（可用于过期天数计算，扩展项） | — |
 
 未使用但了解其定位的工具：`mall-product-detail`（SPU 详情/SKU）、`mall-create-order`（兑换下单）、`query-meals` / `calculate-price` / `create-order`（点餐链路）、`query-party-*`（派对预约）等，共 35 个。
@@ -95,7 +97,29 @@ mall-points-products ─► 过滤 shopId=2（积分兑换餐品券）且 status
 - **降级策略**：检测不到本地服务时自动切换内置演示数据（页面右上角标记「演示数据」），保证评审在没有 token 的环境下也能看到完整 UI；
 - **只读优先**：仅 `/api/coupons/claim` 一个写接口，且需前端显式点击按钮触发。
 
-### 3.4 WorkBuddy 自动化集成
+### 3.4 兑换链路（写操作，三道闸门）
+
+兑换会真实扣积分且不可撤销，因此设计成「查询 → 选规格 → 二次确认 → 下单」：
+
+```
+mall-points-products ──► 过滤 shopId=2 且在售未过期（status=2 且 downTime ≥ now）
+        │                  ↑ 关键修正：仅看 status 会混入已过期商品，详情会返回「商品已下架」
+        ▼
+mall-product-detail(spuId) ──► skuList（skuId / points / price）+ spuCategory + note 使用须知
+        │
+        ▼  用户点「兑换」→ 弹窗选 SKU → 再点「确认兑换」
+mall-create-order(skuId, spuCategory, count) ──► orderId
+```
+
+安全闸门：
+
+1. **能力过滤**：只展示当前可用积分够兑、且在有效期内的商品（`downTime < now` 直接剔除）；
+2. **二次确认**：Web 端必须点开弹窗并再点确认；CLI 端不加 `--yes` 只做预演，打印扣分与余额；
+3. **余额预检**：CLI 预先比较 `points` 与 `availablePoint`，不足直接拒绝，不发请求。
+
+`spuCategory` 语义（来自官方 schema）：`"1"` 虚拟商品（券，无门店依赖，如本项目兑换的餐品券）；`"2"` 实体物品（需 `addressId`）。派对类活动走 `party-order-create`，不属于本链路。
+
+### 3.5 WorkBuddy 自动化集成
 
 本项目在腾讯 WorkBuddy 中通过「自定义连接器」接入同一 MCP Server（配置见 `mcp-config.example.json`），并创建每日定时自动化，Prompt 等价于：
 

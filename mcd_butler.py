@@ -201,6 +201,16 @@ def _to_float(v) -> float:
         return float("inf")
 
 
+def _parse_time(v):
+    """解析 MCP 返回的 'YYYY-MM-DD HH:MM:SS' 时间串，失败返回 None。"""
+    if not v:
+        return None
+    try:
+        return datetime.strptime(str(v)[:19], "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return None
+
+
 def _mall_items(client: McpClient) -> list:
     """拉取积分商城全部 SPU。"""
     resp = client.call_tool("mall-points-products")
@@ -210,16 +220,87 @@ def _mall_items(client: McpClient) -> list:
     return items or []
 
 
-def _affordable(items: list, max_points: float) -> list:
-    """过滤出可用积分能兑换的在售餐品券，按所需积分升序。"""
-    result = [
-        p for p in items
-        if p.get("shopId") == 2
-        and str(p.get("status")) == "2"
-        and _to_float(p.get("point")) <= max_points
-    ]
+def _affordable(items: list, max_points: float, include_expired: bool = False) -> list:
+    """过滤出可用积分能兑换的在售餐品券（shopId=2），按所需积分升序。
+
+    注意：仅凭 status=2 不够——已过 downTime 的商品仍会出现在列表里，
+    但详情接口会返回「商品已下架」，因此这里必须按 downTime 过滤。
+    """
+    now = datetime.now()
+    result = []
+    for p in items:
+        if p.get("shopId") != 2 or str(p.get("status")) != "2":
+            continue
+        if _to_float(p.get("point")) > max_points:
+            continue
+        down = _parse_time(p.get("downTime"))
+        if not include_expired and down is not None and down < now:
+            continue
+        result.append(p)
     result.sort(key=lambda p: _to_float(p.get("point")))
     return result
+
+
+def _strip_html(text) -> str:
+    """把 MCP 返回的富文本说明转成纯文本（<br> 转换行，去标签，反转义）。"""
+    import html
+    import re
+    if not text:
+        return ""
+    s = re.sub(r"<br\s*/?>", "\n", str(text), flags=re.IGNORECASE)
+    s = re.sub(r"</p>", "\n", s, flags=re.IGNORECASE)
+    s = re.sub(r"<[^>]+>", "", s)
+    s = html.unescape(s)
+    return re.sub(r"\n{3,}", "\n\n", s).strip()
+
+
+def _product_detail(client: McpClient, spu_id) -> dict:
+    """查询 SPU 详情与 SKU 列表（兑换前必须先拿 skuId 与 spuCategory）。"""
+    resp = client.call_tool("mall-product-detail", {"spuId": int(spu_id)})
+    if not resp.get("success"):
+        raise McpError(resp.get("message") or "商品详情获取失败")
+    data = resp.get("data") or {}
+    skus = [
+        {
+            "skuId": s.get("skuId"),
+            "points": s.get("points"),
+            "price": s.get("price"),
+            "extTradePrice": s.get("extTradePrice"),
+        }
+        for s in (data.get("skuList") or [])
+    ]
+    return {
+        "spuId": data.get("spuId"),
+        "spuName": data.get("spuName"),
+        "spuCategory": str(data.get("spuCategory")),
+        "shopId": data.get("shopId"),
+        "downDate": data.get("downDate"),
+        "note": _strip_html(data.get("note")),
+        "detail": _strip_html(data.get("detail")),
+        "spuLimit": data.get("spuLimit"),
+        "skus": skus,
+    }
+
+
+def _redeem(client: McpClient, sku_id, spu_category, count: int = 1,
+            address_id: str | None = None) -> dict:
+    """创建积分兑换订单（写操作：真实扣积分）。
+
+    spuCategory: "1" 虚拟商品（券），"2" 实体物品（需 addressId）。
+    """
+    args = {"skuId": int(sku_id), "spuCategory": str(spu_category), "count": int(count)}
+    if address_id:
+        args["addressId"] = address_id
+    resp = client.call_tool("mall-create-order", args)
+    if not resp.get("success"):
+        raise McpError(resp.get("message") or "兑换失败")
+    data = resp.get("data") or {}
+    return {
+        "orderId": data.get("orderId"),
+        "amount": data.get("amount"),
+        "points": data.get("points") or data.get("usePoint") or data.get("totalPoint"),
+        "raw": data,
+    }
 
 
 def cmd_mall(client: McpClient, max_points: float | None = None, top: int = 10) -> None:
@@ -234,6 +315,52 @@ def cmd_mall(client: McpClient, max_points: float | None = None, top: int = 10) 
               f"(原价¥{p.get('price')}, 兑换至 {str(p.get('downTime'))[:10]})")
     if not affordable:
         print("可用积分暂不足以兑换任何商品，赚分要紧！")
+
+
+def cmd_detail(client: McpClient, spu_id: int) -> dict:
+    """查看兑换商品详情与 SKU。"""
+    d = _product_detail(client, spu_id)
+    print(f"== {d['spuName']} （spuId={d['spuId']}, spuCategory={d['spuCategory']}）==")
+    print(f"兑换截止: {str(d.get('downDate'))[:10]}")
+    if d.get("detail"):
+        print(f"详情: {d['detail'][:200]}")
+    print("SKU:")
+    for s in d["skus"]:
+        print(f"  - skuId={s['skuId']}  需 {fmt_points(s.get('points'))} 分  "
+              f"现金 ¥{s.get('price')}")
+    print("(兑换命令: python3 mcd_butler.py redeem --spu %s --sku <skuId> --yes)" % d["spuId"])
+    return d
+
+
+def cmd_redeem(client: McpClient, spu_id: int, sku_id: int | None = None,
+               count: int = 1, yes: bool = False) -> None:
+    """兑换积分商品（写操作，真实扣积分）。"""
+    d = _product_detail(client, spu_id)
+    if sku_id is None:
+        print(f"== {d['spuName']} 可选 SKU ==")
+        for s in d["skus"]:
+            print(f"  - skuId={s['skuId']}  需 {fmt_points(s.get('points'))} 分")
+        print("请用 --sku <skuId> 指定规格后重试。")
+        return
+    sku = next((s for s in d["skus"] if str(s["skuId"]) == str(sku_id)), None)
+    if sku is None:
+        raise McpError(f"spuId={spu_id} 下不存在 skuId={sku_id}")
+    acc = client.call_tool("query-my-account").get("data", {})
+    available = float(acc.get("availablePoint") or 0)
+    need = _to_float(sku.get("points"))
+    if need > available:
+        raise McpError(f"积分不足：需 {fmt_points(need)}，可用 {fmt_points(available)}")
+    if not yes:
+        print(f"[预演] 将兑换「{d['spuName']}」skuId={sku_id}，扣 {fmt_points(need)} 积分，"
+              f"兑换后余额约 {fmt_points(available - need)}。")
+        print("确认执行请加 --yes（该操作真实扣积分，不可撤销）。")
+        return
+    r = _redeem(client, sku_id, d["spuCategory"], count)
+    print("== 兑换成功 ==")
+    print(f"订单号: {r.get('orderId')}")
+    print(f"扣减积分: {fmt_points(need)}，剩余约 {fmt_points(available - need)}")
+    if r.get("amount") not in (None, "", "0"):
+        print(f"现金支付: ¥{r.get('amount')}")
 
 
 def _report_markdown(client: McpClient) -> str:
@@ -341,6 +468,13 @@ def cmd_serve(client: McpClient, host: str = "127.0.0.1", port: int = 8787) -> N
                         acc = client.call_tool("query-my-account").get("data", {})
                         limit = float(acc.get("availablePoint") or 0)
                     self._json({"data": _affordable(_mall_items(client), limit)})
+                elif path == "/api/mall/detail":
+                    qs = parse_qs(parsed.query)
+                    spu_id = qs.get("spuId", [None])[0]
+                    if not spu_id:
+                        self._json({"error": "缺少 spuId"}, 400)
+                    else:
+                        self._json(_product_detail(client, spu_id))
                 elif path == "/api/report":
                     self._json({"markdown": _report_markdown(client),
                                 "date": datetime.now().strftime("%Y-%m-%d")})
@@ -352,6 +486,14 @@ def cmd_serve(client: McpClient, host: str = "127.0.0.1", port: int = 8787) -> N
                 self._json({"error": str(e)}, 502)
             except Exception as e:  # noqa: BLE001 - 单请求失败不应拖垮服务
                 self._json({"error": f"{type(e).__name__}: {e}"}, 500)
+
+        def _body(self) -> dict:
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+                raw = self.rfile.read(length).decode("utf-8") if length else "{}"
+                return json.loads(raw or "{}")
+            except (ValueError, json.JSONDecodeError):
+                return {}
 
         def do_POST(self):
             path = urlparse(self.path).path
@@ -365,6 +507,18 @@ def cmd_serve(client: McpClient, host: str = "127.0.0.1", port: int = 8787) -> N
                         "successCoupons": resp.get("successCoupons", []),
                         "failedCoupons": resp.get("failedCoupons", []),
                     })
+                elif path == "/api/mall/redeem":
+                    body = self._body()
+                    if not body.get("skuId") or not body.get("spuCategory"):
+                        self._json({"error": "缺少 skuId 或 spuCategory"}, 400)
+                    else:
+                        self._json(_redeem(
+                            client,
+                            body["skuId"],
+                            body["spuCategory"],
+                            int(body.get("count") or 1),
+                            body.get("addressId"),
+                        ))
                 else:
                     self._json({"error": "接口不存在"}, 404)
             except McpError as e:
@@ -411,6 +565,15 @@ def main():
     p_mall.add_argument("--max", type=float, help="积分上限（默认取当前可用积分）")
     p_mall.add_argument("--top", type=int, default=10, help="展示条数（默认 10）")
 
+    p_detail = sub.add_parser("detail", help="查看兑换商品详情与 SKU")
+    p_detail.add_argument("--spu", type=int, required=True, help="商品 SPU ID")
+
+    p_redeem = sub.add_parser("redeem", help="兑换积分商品（写操作，需 --yes 确认）")
+    p_redeem.add_argument("--spu", type=int, required=True, help="商品 SPU ID")
+    p_redeem.add_argument("--sku", type=int, help="SKU ID（不传则列出可选 SKU）")
+    p_redeem.add_argument("--count", type=int, default=1, help="兑换数量（默认 1）")
+    p_redeem.add_argument("--yes", action="store_true", help="确认执行，真实扣积分不可撤销")
+
     sub.add_parser("report", help="生成 Markdown 积分周报")
     sub.add_parser("all", help="report + 终端摘要（适合 cron / WorkBuddy 自动化）")
 
@@ -427,6 +590,10 @@ def main():
             cmd_coupons(client, args.claim)
         elif args.command == "mall":
             cmd_mall(client, args.max, args.top)
+        elif args.command == "detail":
+            cmd_detail(client, args.spu)
+        elif args.command == "redeem":
+            cmd_redeem(client, args.spu, args.sku, args.count, args.yes)
         elif args.command == "report":
             cmd_report(client)
         elif args.command == "serve":

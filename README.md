@@ -12,7 +12,8 @@
 |---|---|---|
 | 积分快照 & 过期预警 | `query-my-account` | 可用/累计/将过期积分一目了然，超过阈值主动告警 |
 | 优惠券一键领取 | `available-coupons` + `auto-bind-coupons` | 查询麦麦省全部可领券并自动领取 |
-| 兑换推荐 | `mall-points-products` | 过滤出可积分兑换的餐品券，按所需积分升序，只用当前可用积分能兑的 |
+| 兑换推荐 | `mall-points-products` | 过滤出可积分兑换的餐品券，按所需积分升序，只用当前可用积分能兑的；已过 `downTime` 的商品自动剔除 |
+| **积分兑换** | `mall-product-detail` + `mall-create-order` | 点「兑换」→ 选 SKU → 二次确认 → 真实下单，返回订单号；CLI 端不加 `--yes` 只预演不扣分 |
 | 积分周报 | 上述工具组合 | 生成 Markdown 周报，可配合 cron / WorkBuddy 自动化定时运行 |
 | **Web 看板** | 上述工具组合 | 一条命令启动本地看板，积分/券/兑换推荐实时可视化，支持生成与下载周报 |
 
@@ -60,6 +61,9 @@ python3 mcd_butler.py coupons           # 查看可领取优惠券
 python3 mcd_butler.py coupons --claim   # 一键领取全部可领券
 python3 mcd_butler.py mall              # 按可用积分推荐可兑换商品
 python3 mcd_butler.py mall --max 500    # 只看 500 分以内的兑换项
+python3 mcd_butler.py detail --spu 17073          # 查看商品详情与 SKU
+python3 mcd_butler.py redeem --spu 17073 --sku 17779          # 兑换预演（不扣分）
+python3 mcd_butler.py redeem --spu 17073 --sku 17779 --yes    # 确认兑换（真实扣积分）
 python3 mcd_butler.py report            # 生成 Markdown 周报到 reports/
 python3 mcd_butler.py all               # report + 终端摘要（适合定时任务）
 ```
@@ -80,7 +84,8 @@ python3 mcd_butler.py serve --port 8787
 - **优惠券列表**：实时拉取麦麦省可领券；已领取的显示灰标「已领取」并标注已入卡包
 - **一键领取**：页面上直接领全部可领券，按钮显示待领张数，领完自动置灰并提示成功数；无券可领时幂等返回 0，不报错
 - **卡包统计**：券区标题旁显示「卡包 N 张」
-- **兑换推荐**：按可用积分过滤，50/100 分档位绿色高亮，标明原价与兑换截止日
+- **兑换推荐**：按可用积分过滤，50/100 分档位绿色高亮，标明原价与兑换截止日；已过期商品自动剔除
+- **积分兑换**：每张商品卡带「兑换」按钮 → 弹窗展示 SKU 与使用须知 → 二次确认后真实下单，成功页显示订单号
 - **周报**：一键生成 Markdown 预览 + 下载 `.md`，可存档或贴到笔记里
 - **降级保护**：直接双击打开 `web/index.html`（无后端）时自动切换演示数据，适合评审快速预览 UI
 - **凭证隔离**：token 只存在于本地 Python 服务进程，前端代码与网络请求中不出现任何凭证
@@ -94,7 +99,9 @@ python3 mcd_butler.py serve --port 8787
 | GET | `/api/coupons` | 可领优惠券 |
 | POST | `/api/coupons/claim` | 一键领券（调用 `auto-bind-coupons`，返回 successCount/failedCount） |
 | GET | `/api/my-coupons` | 卡包券列表与张数（`query-my-coupons`） |
-| GET | `/api/mall?max=500` | 兑换推荐（可按积分上限过滤） |
+| GET | `/api/mall?max=500` | 兑换推荐（可按积分上限过滤，自动排除已过期） |
+| GET | `/api/mall/detail?spuId=17073` | 商品详情与 SKU 列表 |
+| POST | `/api/mall/redeem` | 兑换下单 `{skuId, spuCategory, count}`（真实扣积分） |
 | GET | `/api/report` | 生成周报 Markdown |
 | GET | `/api/health` | 健康检查 |
 

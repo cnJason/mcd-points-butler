@@ -127,6 +127,50 @@
   .pt.low{color:#0B7A54;background:#E6F6EF}
   .item-name{font-size:14px;font-weight:600;line-height:1.4;min-height:39px}
   .item-foot{display:flex;align-items:center;justify-content:space-between;font-size:11.5px;color:var(--ink-3);margin-top:auto}
+  .item-foot .redeem-btn{padding:5px 12px;font-size:12px;border-radius:8px}
+
+  /* modal */
+  .modal{
+    position:fixed;inset:0;background:rgba(26,26,26,.42);display:none;
+    align-items:center;justify-content:center;padding:20px;z-index:80;
+    -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);
+  }
+  .modal.show{display:flex}
+  .dialog{
+    background:#fff;border-radius:18px;width:100%;max-width:460px;max-height:86vh;
+    display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,.22);
+    animation:pop .16s ease-out;
+  }
+  @keyframes pop{from{transform:translateY(8px) scale(.985);opacity:.6}to{transform:none;opacity:1}}
+  .dialog-head{padding:20px 22px 12px;border-bottom:1px solid var(--line)}
+  .dialog-head h3{font-size:16px;font-weight:700}
+  .dialog-head p{font-size:12px;color:var(--ink-3);margin-top:4px}
+  .dialog-body{padding:16px 22px;overflow:auto}
+  .sku{
+    display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line);
+    border-radius:11px;cursor:pointer;margin-bottom:8px;transition:.12s;
+  }
+  .sku:hover{border-color:#D9D6D0;background:#FCFCFA}
+  .sku.sel{border-color:var(--red);background:#FFF7F6;box-shadow:0 0 0 1px var(--red) inset}
+  .sku input{accent-color:var(--red);width:16px;height:16px}
+  .sku-main{flex:1;font-size:13.5px;font-weight:600}
+  .sku-sub{font-size:11.5px;color:var(--ink-3);font-weight:500;margin-top:2px}
+  .sku-pt{font-size:12.5px;font-weight:800;color:var(--red);flex:none}
+  .note-box{
+    margin-top:14px;padding:11px 13px;background:#FBFBF9;border:1px solid var(--line);
+    border-radius:10px;font-size:12px;color:var(--ink-2);line-height:1.65;
+    max-height:120px;overflow:auto;white-space:pre-wrap;
+  }
+  .warn-line{font-size:12px;color:#B01E13;margin-top:12px;line-height:1.6}
+  .dialog-foot{
+    display:flex;gap:10px;justify-content:flex-end;padding:14px 22px 18px;
+    border-top:1px solid var(--line);
+  }
+  .ok-box{text-align:center;padding:8px 0 4px}
+  .ok-icon{font-size:34px;margin-bottom:8px}
+  .ok-title{font-size:15px;font-weight:700;margin-bottom:6px}
+  .ok-sub{font-size:12.5px;color:var(--ink-2);line-height:1.7}
+  .ok-sub code{background:#F4F4F1;padding:2px 6px;border-radius:5px;font-size:12px}
   .void{color:var(--ink-3);font-size:13px;padding:22px;text-align:center}
 
   /* report */
@@ -226,6 +270,20 @@
 </div>
 <div class="toast" id="toast"></div>
 
+<div class="modal" id="modal">
+  <div class="dialog">
+    <div class="dialog-head">
+      <h3 id="dlg-title">兑换商品</h3>
+      <p id="dlg-sub"></p>
+    </div>
+    <div class="dialog-body" id="dlg-body"></div>
+    <div class="dialog-foot" id="dlg-foot">
+      <button class="btn-ghost" id="dlg-cancel">取消</button>
+      <button class="btn-primary" id="dlg-ok">确认兑换</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ---- 演示数据：静态打开（无后端）时的降级展示 ----
 const DEMO = {
@@ -243,6 +301,7 @@ const DEMO = {
 };
 
 const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const num = v => {
   const n = Number(v);
   return Number.isFinite(n) ? n.toLocaleString('zh-CN', {maximumFractionDigits:1}) : '--';
@@ -266,7 +325,11 @@ function toast(msg){
 
 async function api(path, opts){
   const res = await fetch(path, Object.assign({headers:{'Content-Type':'application/json'}}, opts));
-  if(!res.ok) throw new Error((await res.text()) || res.status);
+  if(!res.ok){
+    let msg = 'HTTP ' + res.status;
+    try{ const j = await res.json(); msg = j.error || j.message || msg; }catch(_){}
+    throw new Error(msg);
+  }
   return res.json();
 }
 
@@ -329,8 +392,11 @@ function renderMall(list){
         <span class="pt ${low ? 'low' : ''}">${num(p.point)} 分</span>
         <span style="font-size:11.5px;color:var(--ink-3)">原价 ${price}</span>
       </div>
-      <div class="item-name">${p.spuName}</div>
-      <div class="item-foot"><span>到店兑换</span><span>截止 ${down || '—'}</span></div>
+      <div class="item-name">${esc(p.spuName)}</div>
+      <div class="item-foot">
+        <span>截止 ${down || '—'}</span>
+        <button class="btn-primary redeem-btn" data-spu="${p.spuId}">兑换</button>
+      </div>
     </div>`;
   }).join('');
 }
@@ -405,6 +471,111 @@ $('dl-report').onclick = () => {
   a.download = `mcd-points-report-${new Date().toISOString().slice(0,10)}.md`;
   a.click();
   URL.revokeObjectURL(a.href);
+};
+
+// ---- 兑换流程：选 SKU → 二次确认 → 真实下单 ----
+let currentDetail = null;
+let selectedSku = null;
+
+function closeModal(){
+  $('modal').classList.remove('show');
+  currentDetail = null;
+  selectedSku = null;
+}
+$('dlg-cancel').onclick = closeModal;
+$('modal').addEventListener('click', e => { if(e.target.id === 'modal') closeModal(); });
+document.addEventListener('keydown', e => { if(e.key === 'Escape') closeModal(); });
+
+$('mall').addEventListener('click', e => {
+  const btn = e.target.closest('.redeem-btn');
+  if(btn) openRedeem(btn.dataset.spu);
+});
+
+async function openRedeem(spuId){
+  if(!liveMode){ toast('演示数据模式不能兑换，请先启动本地服务'); return; }
+  currentDetail = null;
+  selectedSku = null;
+  $('dlg-title').textContent = '兑换商品';
+  $('dlg-sub').textContent = '加载中…';
+  $('dlg-body').innerHTML = '<div class="void">正在获取 SKU…</div>';
+  $('dlg-foot').style.display = '';
+  $('dlg-ok').style.display = '';
+  $('dlg-ok').disabled = true;
+  $('dlg-ok').textContent = '确认兑换';
+  $('modal').classList.add('show');
+  try{
+    const d = await api('/api/mall/detail?spuId=' + encodeURIComponent(spuId));
+    currentDetail = d;
+    renderDialog(d);
+  }catch(err){
+    $('dlg-sub').textContent = '';
+    $('dlg-body').innerHTML = `<div class="void">加载失败：${esc(err.message)}</div>`;
+  }
+}
+
+function renderDialog(d){
+  $('dlg-title').textContent = d.spuName || '兑换商品';
+  const down = (d.downDate || '').slice(0,10);
+  $('dlg-sub').textContent = `兑换截止 ${down || '—'} · 兑换后不可撤销`;
+  const skus = d.skus || [];
+  if(skus.length){
+    selectedSku = skus[0];
+    $('dlg-ok').disabled = false;
+  }
+  $('dlg-body').innerHTML = `
+    ${skus.length ? skus.map((s,i)=>`
+      <label class="sku ${i===0?'sel':''}" data-sku="${s.skuId}" data-pt="${s.points}">
+        <input type="radio" name="sku" ${i===0?'checked':''}>
+        <span class="sku-main">${esc(d.spuName)}
+          <span class="sku-sub">skuId ${s.skuId} · 现金 ¥${s.price || '0'}</span>
+        </span>
+        <span class="sku-pt">${num(s.points)} 分</span>
+      </label>`).join('') : '<div class="void">该商品暂无可用 SKU</div>'}
+    ${d.note ? `<div class="note-box">${esc(d.note)}</div>` : ''}
+    <div class="warn-line">⚠️ 确认后将真实扣减积分并生成兑换订单，不可撤销。券码请到麦当劳 App「卡包」查看。</div>`;
+  $('dlg-body').querySelectorAll('.sku').forEach(el => {
+    el.onclick = () => {
+      $('dlg-body').querySelectorAll('.sku').forEach(x => x.classList.remove('sel'));
+      el.classList.add('sel');
+      selectedSku = {skuId: el.dataset.sku, points: el.dataset.pt};
+    };
+  });
+}
+
+$('dlg-ok').onclick = async () => {
+  if(!currentDetail || !selectedSku) return;
+  const btn = $('dlg-ok');
+  const pts = selectedSku.points;
+  btn.disabled = true;
+  btn.textContent = '兑换中…';
+  try{
+    const r = await api('/api/mall/redeem', {
+      method:'POST',
+      body: JSON.stringify({
+        skuId: Number(selectedSku.skuId),
+        spuCategory: currentDetail.spuCategory,
+        count: 1
+      })
+    });
+    $('dlg-sub').textContent = '';
+    $('dlg-foot').style.display = 'none';
+    $('dlg-body').innerHTML = `
+      <div class="ok-box">
+        <div class="ok-icon">🎉</div>
+        <div class="ok-title">兑换成功</div>
+        <div class="ok-sub">
+          扣减 ${num(pts)} 积分<br>
+          订单号 <code>${esc(r.orderId || '—')}</code><br>
+          券码请到麦当劳 App「卡包」查看
+        </div>
+      </div>`;
+    toast('兑换成功');
+    await load();
+  }catch(err){
+    toast('兑换失败：' + (err.message || '未知错误'));
+    btn.disabled = false;
+    btn.textContent = '确认兑换';
+  }
 };
 
 load();

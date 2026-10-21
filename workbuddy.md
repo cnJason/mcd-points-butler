@@ -67,7 +67,17 @@ WorkBuddy 在 Agent 模式下完成了全部工程动作：
 2. **补 UI**：券区新增「一键领取 N 张」按钮（领完自动置灰为「已全部领取」）、已领券灰标 + ✅ 图标、卡包张数展示；新增 `GET /api/my-coupons` 接口；
 3. **修边界 bug**：无券可领时 `auto-bind-coupons` 返回 `data: null`，原代码 `.get("data", {})` 触发 `AttributeError`，改为 `or {}` 兜底，幂等重测返回 `0/0` 正常。
 
-### 第 8 步：WorkBuddy 自动化（进行中/可选）
+### 第 8 步：打通积分兑换（含一个被真实数据抓出的 bug）
+
+用户要求「积分兑换的地方也要允许兑换」——此前的兑换推荐是只读的。WorkBuddy 先摸清官方 schema（`mall-create-order` 需 `skuId` + `spuCategory`，虚拟券为 `"1"`、实体为 `"2"`，且仅支持 `shopId=2`），再实现：
+
+1. **后端**：新增 `_product_detail`（`mall-product-detail`）、`_redeem`（`mall-create-order`）、`_strip_html`（使用须知富文本转纯文本）；接口 `GET /api/mall/detail`、`POST /api/mall/redeem`；
+2. **前端**：商品卡新增「兑换」按钮 → 弹窗列 SKU（含所需积分/现金）与使用须知 → 二次确认 → 成功页显示订单号；
+3. **CLI**：`detail --spu`、`redeem --spu --sku [--yes]`，无 `--yes` 只预演、不扣积分；
+4. **修 bug（真实数据暴露）**：原先只按 `status=2` 过滤，把 `downTime` 已过期的商品也推荐出来，点进去访问详情直接返回「商品已下架」（spuId=15866 复现）。补上 `downTime ≥ now` 过滤后，可兑换项从 21 个收敛到 7 个真实有效的；
+5. **验收**：无效 `skuId` 返回 `{"error":"请求的数据格式错误"}`、缺参数返回 400，均未产生扣分。
+
+### 第 9 步：WorkBuddy 自动化（进行中/可选）
 
 本项目计划在 WorkBuddy 中创建每日定时自动化（等价 Prompt）：
 
