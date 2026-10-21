@@ -385,12 +385,12 @@ function renderMall(list){
   if(!list.length){ box.innerHTML = '<div class="void">可用积分暂不足以兑换任何商品，赚分要紧！</div>'; return; }
   box.innerHTML = list.map(p => {
     const low = Number(p.point) <= 100;
-    const price = Number(p.price) > 0 ? `¥${p.price}` : '—';
+    const price = Number(p.price) > 0 ? `原价 ¥${p.price}` : '';
     const down = (p.downTime || '').slice(0,10);
     return `<div class="item">
       <div class="item-top">
         <span class="pt ${low ? 'low' : ''}">${num(p.point)} 分</span>
-        <span style="font-size:11.5px;color:var(--ink-3)">原价 ${price}</span>
+        ${price ? `<span style="font-size:11.5px;color:var(--ink-3)">${price}</span>` : ''}
       </div>
       <div class="item-name">${esc(p.spuName)}</div>
       <div class="item-foot">
@@ -578,7 +578,14 @@ $('dlg-ok').onclick = async () => {
   }
 };
 
-load();
+// 深链：/#redeem=17073 直接打开兑换弹窗（便于分享与截图）
+function openFromHash(){
+  const m = location.hash.match(/^#redeem=(\d+)$/);
+  if(m && liveMode) openRedeem(m[1]);
+}
+window.addEventListener('hashchange', openFromHash);
+
+load().then(openFromHash);
 </script>
 </body>
 </html>
