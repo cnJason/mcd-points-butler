@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "mcd": {
+      "type": "url",
+      "url": "https://mcp.mcd.cn/",
+      "headers": {
+        "Authorization": "Bearer ${MCD_MCP_TOKEN}"
+      }
+    }
+  },
+  "_comment": "脱敏配置示例。${MCD_MCP_TOKEN} 为环境变量占位符，请勿将真实 token 写入任何被版本控制的文件。WorkBuddy 自定义连接器与本项目 CLI 共用同一 Server 地址与 Bearer 鉴权方式。"
+}

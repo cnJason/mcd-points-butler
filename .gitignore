@@ -1,0 +1,13 @@
+# 敏感信息：token 只通过环境变量注入，绝不入库
+.env
+*.env
+
+# 运行产物：reports/ 下的周报不含账号 ID 等身份字段，示例周报作为 demo 证据提交；
+# 如需忽略后续生成物，取消下一行注释
+# reports/*.md
+
+# 系统/编辑器
+.DS_Store
+__pycache__/
+*.pyc
+.venv/

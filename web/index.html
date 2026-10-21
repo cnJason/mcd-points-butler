@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>麦麦积分管家 · 麦当劳 MCP</title>
+<style>
+  :root{
+    --red:#DA291C; --red-dark:#B01E13; --yellow:#FFC72C; --yellow-soft:#FFF4D1;
+    --ink:#1A1A1A; --ink-2:#5C5C5C; --ink-3:#8E8E8E;
+    --bg:#F7F7F5; --card:#FFFFFF; --line:#E8E6E1;
+    --ok:#0E9F6E; --warn:#E02424;
+    --shadow:0 1px 2px rgba(26,26,26,.04), 0 8px 24px rgba(26,26,26,.06);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro SC","PingFang SC","Helvetica Neue",Arial,sans-serif;
+    background:var(--bg); color:var(--ink); -webkit-font-smoothing:antialiased;
+    padding:32px 20px 64px; line-height:1.5;
+  }
+  .wrap{max-width:1080px;margin:0 auto}
+
+  /* header */
+  header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:28px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:12px}
+  .logo{
+    width:44px;height:44px;border-radius:12px;background:var(--red);
+    display:grid;place-items:center;color:var(--yellow);font-weight:800;font-size:20px;
+    box-shadow:0 4px 12px rgba(218,41,28,.25);
+  }
+  .brand h1{font-size:20px;font-weight:700;letter-spacing:-.01em}
+  .brand p{font-size:12.5px;color:var(--ink-3);margin-top:2px}
+  .actions{display:flex;align-items:center;gap:10px}
+  .badge{
+    display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;
+    padding:5px 11px;border-radius:999px;background:#EDEDEA;color:var(--ink-2);
+  }
+  .badge .dot{width:6px;height:6px;border-radius:50%;background:var(--ink-3)}
+  .badge.live{background:#E6F6EF;color:#0B7A54}
+  .badge.live .dot{background:var(--ok);box-shadow:0 0 0 3px rgba(14,159,110,.15)}
+  .badge.demo{background:var(--yellow-soft);color:#8A6100}
+  .badge.demo .dot{background:#C99500}
+
+  button{
+    font:inherit;font-size:13.5px;font-weight:600;cursor:pointer;border:none;
+    padding:9px 16px;border-radius:10px;transition:transform .08s ease, background .15s ease;
+  }
+  button:active{transform:scale(.98)}
+  .btn-primary{background:var(--red);color:#fff}
+  .btn-primary:hover{background:var(--red-dark)}
+  .btn-ghost{background:#fff;color:var(--ink);border:1px solid var(--line)}
+  .btn-ghost:hover{background:#FAFAF8}
+  button:disabled{opacity:.5;cursor:not-allowed}
+
+  /* hero */
+  .hero{
+    background:linear-gradient(135deg,#DA291C 0%,#B01E13 100%);
+    border-radius:20px;padding:26px 28px;color:#fff;position:relative;overflow:hidden;
+    box-shadow:0 12px 32px rgba(218,41,28,.22);margin-bottom:20px;
+  }
+  .hero::after{
+    content:"";position:absolute;right:-60px;top:-60px;width:220px;height:220px;
+    border-radius:50%;background:rgba(255,199,44,.12);
+  }
+  .hero::before{
+    content:"";position:absolute;right:40px;bottom:-90px;width:160px;height:160px;
+    border-radius:50%;background:rgba(255,255,255,.06);
+  }
+  .hero-label{font-size:12.5px;opacity:.82;font-weight:500;letter-spacing:.02em}
+  .hero-num{font-size:52px;font-weight:800;letter-spacing:-.03em;line-height:1.05;margin:6px 0 4px}
+  .hero-num small{font-size:16px;font-weight:600;opacity:.8;margin-left:6px}
+  .hero-grid{
+    display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:22px;
+    border-top:1px solid rgba(255,255,255,.18);padding-top:16px;position:relative;z-index:1;
+  }
+  .hero-cell .k{font-size:11.5px;opacity:.78;margin-bottom:3px}
+  .hero-cell .v{font-size:16px;font-weight:700}
+  .expire-alert{
+    display:flex;align-items:center;gap:10px;margin-top:18px;background:rgba(255,199,44,.16);
+    border:1px solid rgba(255,199,44,.35);border-radius:12px;padding:11px 14px;
+    font-size:13.5px;position:relative;z-index:1;
+  }
+  .expire-alert strong{color:var(--yellow)}
+  .expire-alert.hide{display:none}
+
+  /* sections */
+  section{margin-bottom:20px}
+  .sec-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:0 4px 12px}
+  .sec-head h2{font-size:15.5px;font-weight:700}
+  .sec-head .meta{font-size:12.5px;color:var(--ink-3)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow)}
+
+  /* coupons */
+  .coupon-list{padding:6px}
+  .coupon{display:flex;align-items:center;gap:14px;padding:13px 16px;border-radius:12px}
+  .coupon + .coupon{border-top:1px solid #F2F0EC}
+  .coupon-icon{
+    width:38px;height:38px;border-radius:10px;background:var(--yellow-soft);
+    display:grid;place-items:center;font-size:17px;flex:none;
+  }
+  .coupon-name{font-size:14px;font-weight:600}
+  .coupon-sub{font-size:12px;color:var(--ink-3);margin-top:1px}
+  .chip-get{
+    margin-left:auto;font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:999px;
+    background:#E6F6EF;color:#0B7A54;flex:none;
+  }
+
+  /* mall */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:12px}
+  .item{
+    background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;
+    box-shadow:var(--shadow);display:flex;flex-direction:column;gap:10px;
+    transition:transform .12s ease, box-shadow .12s ease;
+  }
+  .item:hover{transform:translateY(-2px);box-shadow:0 2px 4px rgba(26,26,26,.04),0 14px 28px rgba(26,26,26,.09)}
+  .item-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .pt{
+    font-size:12px;font-weight:800;color:var(--red);background:#FDECEA;
+    padding:4px 9px;border-radius:8px;letter-spacing:-.01em;
+  }
+  .pt.low{color:#0B7A54;background:#E6F6EF}
+  .item-name{font-size:14px;font-weight:600;line-height:1.4;min-height:39px}
+  .item-foot{display:flex;align-items:center;justify-content:space-between;font-size:11.5px;color:var(--ink-3);margin-top:auto}
+  .void{color:var(--ink-3);font-size:13px;padding:22px;text-align:center}
+
+  /* report */
+  .report-card{padding:16px}
+  .report-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  pre{
+    margin-top:14px;background:#FBFBF9;border:1px solid var(--line);border-radius:12px;
+    padding:14px 16px;font-size:12.5px;line-height:1.7;color:var(--ink-2);
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;overflow:auto;max-height:320px;
+    white-space:pre-wrap;
+  }
+  pre.hide{display:none}
+
+  footer{margin-top:32px;text-align:center;font-size:12px;color:var(--ink-3);line-height:1.9}
+  footer a{color:var(--ink-2);text-decoration:none;border-bottom:1px dotted var(--line)}
+  .toast{
+    position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(12px);
+    background:var(--ink);color:#fff;font-size:13px;font-weight:500;padding:10px 18px;
+    border-radius:10px;opacity:0;pointer-events:none;transition:.22s ease;z-index:99;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  @media (max-width:640px){
+    .hero-num{font-size:40px}
+    .hero-grid{grid-template-columns:repeat(2,1fr);gap:16px}
+    body{padding:20px 14px 48px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <div class="logo">M</div>
+      <div>
+        <h1>麦麦积分管家</h1>
+        <p>基于麦当劳官方 MCP Server · 积分过期止损</p>
+      </div>
+    </div>
+    <div class="actions">
+      <span class="badge demo" id="status"><span class="dot"></span><span id="status-text">加载中</span></span>
+      <button class="btn-ghost" id="refresh">刷新</button>
+    </div>
+  </header>
+
+  <div class="hero">
+    <div class="hero-label">麦享会可用积分</div>
+    <div class="hero-num"><span id="available">--</span><small>分</small></div>
+    <div class="hero-grid">
+      <div class="hero-cell"><div class="k">累计积分</div><div class="v" id="accumulative">--</div></div>
+      <div class="hero-cell"><div class="k">已使用</div><div class="v" id="used">--</div></div>
+      <div class="hero-cell"><div class="k">本月将过期</div><div class="v" id="expiring">--</div></div>
+      <div class="hero-cell"><div class="k">历史已过期</div><div class="v" id="expired">--</div></div>
+    </div>
+    <div class="expire-alert hide" id="alert">
+      <span>⚠️</span>
+      <span>本月有 <strong id="alert-pts">0</strong> 积分即将过期，建议尽快兑换——别让积分悄悄归零。</span>
+    </div>
+  </div>
+
+  <section>
+    <div class="sec-head">
+      <h2>可领取优惠券</h2>
+      <span class="meta" id="coupon-meta"></span>
+    </div>
+    <div class="card"><div class="coupon-list" id="coupons"></div></div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>积分兑换推荐</h2>
+      <span class="meta" id="mall-meta"></span>
+    </div>
+    <div class="grid" id="mall"></div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>积分周报</h2>
+      <span class="meta">Markdown 快照，可下载存档</span>
+    </div>
+    <div class="card report-card">
+      <div class="report-actions">
+        <button class="btn-primary" id="gen-report">生成本周周报</button>
+        <button class="btn-ghost" id="dl-report" disabled>下载 .md</button>
+      </div>
+      <pre class="hide" id="report-pre"></pre>
+    </div>
+  </section>
+
+  <footer>
+    数据来自麦当劳 MCP Server <code>mcd-mcp</code>（query-my-account / available-coupons / mall-points-products）<br>
+    Token 仅在本地服务端注入，前端不接触任何凭证
+  </footer>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ---- 演示数据：静态打开（无后端）时的降级展示 ----
+const DEMO = {
+  points: {availablePoint:"2176.5", accumulativePoint:"13568.1", usedPoint:"1507",
+           currentMouthExpirePoint:"159.6", expiredPoint:"9884.6"},
+  coupons: [{couponName:"11.9元麦辣鸡腿堡", label:"可领取"},
+            {couponName:"19.9元王牌炸鸡任选2", label:"可领取"},
+            {couponName:"免费脆薯饼", label:"可领取"}],
+  mall: [{spuName:"5.9元香芋派/菠萝派任选", point:"50", price:"5.9", downTime:"2026-12-30"},
+         {spuName:"6.9元可乐麦炫酷", point:"50", price:"6.9", downTime:"2026-12-30"},
+         {spuName:"18.8元板烧鸡腿堡两件套", point:"100", price:"18.8", downTime:"2026-03-21"},
+         {spuName:"10.9元指定小食任选", point:"100", price:"10.9", downTime:"2026-12-30"},
+         {spuName:"18.8元2份麦辣鸡翅", point:"200", price:"18.8", downTime:"2026-03-21"},
+         {spuName:"21.9元巨无霸可乐组合", point:"800", price:"21.9", downTime:"2026-12-30"}]
+};
+
+const $ = id => document.getElementById(id);
+const num = v => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n.toLocaleString('zh-CN', {maximumFractionDigits:1}) : '--';
+};
+let liveMode = false;
+let reportMarkdown = '';
+
+function setStatus(kind, text){
+  const el = $('status');
+  el.className = 'badge ' + kind;
+  $('status-text').textContent = text;
+}
+function toast(msg){
+  const t = $('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+async function api(path, opts){
+  const res = await fetch(path, Object.assign({headers:{'Content-Type':'application/json'}}, opts));
+  if(!res.ok) throw new Error((await res.text()) || res.status);
+  return res.json();
+}
+
+function renderPoints(p){
+  $('available').textContent   = num(p.availablePoint);
+  $('accumulative').textContent= num(p.accumulativePoint);
+  $('used').textContent        = num(p.usedPoint);
+  $('expiring').textContent    = num(p.currentMouthExpirePoint);
+  $('expired').textContent     = num(p.expiredPoint);
+  const exp = Number(p.currentMouthExpirePoint || 0);
+  if(exp >= 100){
+    $('alert-pts').textContent = num(exp);
+    $('alert').classList.remove('hide');
+  } else {
+    $('alert').classList.add('hide');
+  }
+}
+
+function renderCoupons(list){
+  const box = $('coupons');
+  $('coupon-meta').textContent = list.length ? `${list.length} 张可领` : '暂无';
+  if(!list.length){ box.innerHTML = '<div class="void">当前没有可领取的优惠券</div>'; return; }
+  box.innerHTML = list.map(c => `
+    <div class="coupon">
+      <div class="coupon-icon">🎟️</div>
+      <div>
+        <div class="coupon-name">${c.couponName}</div>
+        <div class="coupon-sub">麦麦省 · 卡包直发</div>
+      </div>
+      <span class="chip-get">${c.label || c.couponStatus || '可领取'}</span>
+    </div>`).join('');
+}
+
+function renderMall(list){
+  const box = $('mall');
+  $('mall-meta').textContent = list.length ? `${list.length} 项可用积分兑换` : '暂无可兑换项';
+  if(!list.length){ box.innerHTML = '<div class="void">可用积分暂不足以兑换任何商品，赚分要紧！</div>'; return; }
+  box.innerHTML = list.map(p => {
+    const low = Number(p.point) <= 100;
+    const price = Number(p.price) > 0 ? `¥${p.price}` : '—';
+    const down = (p.downTime || '').slice(0,10);
+    return `<div class="item">
+      <div class="item-top">
+        <span class="pt ${low ? 'low' : ''}">${num(p.point)} 分</span>
+        <span style="font-size:11.5px;color:var(--ink-3)">原价 ${price}</span>
+      </div>
+      <div class="item-name">${p.spuName}</div>
+      <div class="item-foot"><span>到店兑换</span><span>截止 ${down || '—'}</span></div>
+    </div>`;
+  }).join('');
+}
+
+async function load(){
+  setStatus('demo', '连接中…');
+  try{
+    const [points, coupons, mall] = await Promise.all([
+      api('/api/points'), api('/api/coupons'), api('/api/mall')
+    ]);
+    liveMode = true;
+    setStatus('live', '实时数据');
+    renderPoints(points.data || points);
+    renderCoupons(coupons.data || coupons);
+    renderMall(mall.data || mall);
+  }catch(e){
+    liveMode = false;
+    setStatus('demo', '演示数据');
+    renderPoints(DEMO.points);
+    renderCoupons(DEMO.coupons);
+    renderMall(DEMO.mall);
+  }
+}
+
+$('refresh').onclick = () => { load(); toast('已刷新'); };
+
+$('gen-report').onclick = async () => {
+  const btn = $('gen-report'); btn.disabled = true; btn.textContent = '生成中…';
+  try{
+    if(!liveMode) throw new Error('静态预览模式无法生成');
+    const r = await api('/api/report');
+    reportMarkdown = r.markdown || '';
+    $('report-pre').textContent = reportMarkdown;
+    $('report-pre').classList.remove('hide');
+    $('dl-report').disabled = false;
+    toast('周报已生成');
+  }catch(e){
+    toast('生成失败：需要启动本地服务（python3 mcd_butler.py serve）');
+  }finally{
+    btn.disabled = false; btn.textContent = '生成本周周报';
+  }
+};
+
+$('dl-report').onclick = () => {
+  if(!reportMarkdown) return;
+  const blob = new Blob([reportMarkdown], {type:'text/markdown;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `mcd-points-report-${new Date().toISOString().slice(0,10)}.md`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+load();
+</script>
+</body>
+</html>
