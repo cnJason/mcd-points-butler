@@ -330,6 +330,10 @@ def cmd_serve(client: McpClient, host: str = "127.0.0.1", port: int = 8787) -> N
                     self._json(client.call_tool("query-my-account"))
                 elif path == "/api/coupons":
                     self._json(client.call_tool("available-coupons"))
+                elif path == "/api/my-coupons":
+                    resp = client.call_tool("query-my-coupons").get("data", {})
+                    coupons = resp.get("coupons", []) if isinstance(resp, dict) else []
+                    self._json({"count": len(coupons), "data": coupons})
                 elif path == "/api/mall":
                     qs = parse_qs(parsed.query)
                     limit = float(qs["max"][0]) if "max" in qs else None
@@ -353,7 +357,14 @@ def cmd_serve(client: McpClient, host: str = "127.0.0.1", port: int = 8787) -> N
             path = urlparse(self.path).path
             try:
                 if path == "/api/coupons/claim":
-                    self._json(client.call_tool("auto-bind-coupons"))
+                    # 无可领券时服务器返回 data: null，用 or {} 兜底
+                    resp = client.call_tool("auto-bind-coupons").get("data") or {}
+                    self._json({
+                        "successCount": resp.get("successCount", 0),
+                        "failedCount": resp.get("failedCount", 0),
+                        "successCoupons": resp.get("successCoupons", []),
+                        "failedCoupons": resp.get("failedCoupons", []),
+                    })
                 else:
                     self._json({"error": "接口不存在"}, 404)
             except McpError as e:

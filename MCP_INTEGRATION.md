@@ -20,7 +20,8 @@
 |---|---|---|---|
 | `query-my-account` | 查询 | 积分账户快照：可用/累计/将过期/冻结积分 | `cmd_points` / `cmd_mall` / `cmd_report` |
 | `available-coupons` | 查询 | 麦麦省当前可领取的优惠券列表 | `cmd_coupons` / `cmd_report` |
-| `auto-bind-coupons` | 领取（低风险） | 一键领取全部可领券，仅在显式传 `--claim` 时调用 | `cmd_coupons --claim` |
+| `auto-bind-coupons` | 领取（低风险） | 一键领取全部可领券，仅在显式传 `--claim` 或点击页面按钮时调用 | `cmd_coupons --claim` / `POST /api/coupons/claim` |
+| `query-my-coupons` | 查询 | 卡包内已领取券列表（校验领取结果、展示卡包张数） | `GET /api/my-coupons` |
 | `mall-points-products` | 查询 | 积分商城可兑换商品列表（SPU 级） | `cmd_mall` / `cmd_report` |
 | `now-time-info` | 查询 | 服务器时间（可用于过期天数计算，扩展项） | — |
 

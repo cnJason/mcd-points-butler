@@ -59,7 +59,15 @@ WorkBuddy 在 Agent 模式下完成了全部工程动作：
 4. 联调通过：页面 200（14.8KB）、真实数据 21 项可兑换、3 张券、159.6 分过期预警；
 5. 定位并绕过一个工程陷阱：本机 curl 访问 `127.0.0.1` 被环境代理拦截（502 upstream connect failed），需 `--noproxy` 才通。
 
-### 第 7 步：WorkBuddy 自动化（进行中/可选）
+### 第 7 步：补齐领券功能并真实领券
+
+用户提出「帮我补上功能，帮我领卷」——前端此前只有券列表、缺领取入口（后端接口存在但无 UI），WorkBuddy 完成两件事：
+
+1. **真实领取**：调用 `auto-bind-coupons` 领取 3 张券（11.9 元麦辣鸡腿堡 / 19.9 元王牌炸鸡任选 2 / 免费脆薯饼），`successCount: 3, failedCount: 0`；随后用 `query-my-coupons` 校验卡包，状态变为 `HAVING_RECEIVE`（已领取）；
+2. **补 UI**：券区新增「一键领取 N 张」按钮（领完自动置灰为「已全部领取」）、已领券灰标 + ✅ 图标、卡包张数展示；新增 `GET /api/my-coupons` 接口；
+3. **修边界 bug**：无券可领时 `auto-bind-coupons` 返回 `data: null`，原代码 `.get("data", {})` 触发 `AttributeError`，改为 `or {}` 兜底，幂等重测返回 `0/0` 正常。
+
+### 第 8 步：WorkBuddy 自动化（进行中/可选）
 
 本项目计划在 WorkBuddy 中创建每日定时自动化（等价 Prompt）：
 

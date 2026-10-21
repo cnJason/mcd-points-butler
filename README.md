@@ -77,7 +77,9 @@ python3 mcd_butler.py serve --port 8787
 看板特性：
 
 - **积分 Hero 卡**：可用积分大字展示，本月将过期积分 ≥100 时自动亮起告警条
-- **优惠券列表**：实时拉取麦麦省可领券
+- **优惠券列表**：实时拉取麦麦省可领券；已领取的显示灰标「已领取」并标注已入卡包
+- **一键领取**：页面上直接领全部可领券，按钮显示待领张数，领完自动置灰并提示成功数；无券可领时幂等返回 0，不报错
+- **卡包统计**：券区标题旁显示「卡包 N 张」
 - **兑换推荐**：按可用积分过滤，50/100 分档位绿色高亮，标明原价与兑换截止日
 - **周报**：一键生成 Markdown 预览 + 下载 `.md`，可存档或贴到笔记里
 - **降级保护**：直接双击打开 `web/index.html`（无后端）时自动切换演示数据，适合评审快速预览 UI
@@ -90,7 +92,8 @@ python3 mcd_butler.py serve --port 8787
 | GET | `/` | 看板页面 |
 | GET | `/api/points` | 积分快照 |
 | GET | `/api/coupons` | 可领优惠券 |
-| POST | `/api/coupons/claim` | 一键领券（调用 `auto-bind-coupons`） |
+| POST | `/api/coupons/claim` | 一键领券（调用 `auto-bind-coupons`，返回 successCount/failedCount） |
+| GET | `/api/my-coupons` | 卡包券列表与张数（`query-my-coupons`） |
 | GET | `/api/mall?max=500` | 兑换推荐（可按积分上限过滤） |
 | GET | `/api/report` | 生成周报 Markdown |
 | GET | `/api/health` | 健康检查 |

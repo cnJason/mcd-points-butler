@@ -88,6 +88,8 @@
   .sec-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:0 4px 12px}
   .sec-head h2{font-size:15.5px;font-weight:700}
   .sec-head .meta{font-size:12.5px;color:var(--ink-3)}
+  .sec-actions{display:flex;align-items:center;gap:10px}
+  .btn-sm{padding:6px 13px;font-size:12.5px;border-radius:9px}
   .card{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow)}
 
   /* coupons */
@@ -103,6 +105,10 @@
   .chip-get{
     margin-left:auto;font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:999px;
     background:#E6F6EF;color:#0B7A54;flex:none;
+  }
+  .chip-done{
+    margin-left:auto;font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:999px;
+    background:#EDEDEA;color:var(--ink-3);flex:none;
   }
 
   /* mall */
@@ -182,8 +188,11 @@
 
   <section>
     <div class="sec-head">
-      <h2>可领取优惠券</h2>
-      <span class="meta" id="coupon-meta"></span>
+      <h2>优惠券</h2>
+      <div class="sec-actions">
+        <span class="meta" id="coupon-meta"></span>
+        <button class="btn-primary btn-sm" id="claim-all">一键领取</button>
+      </div>
     </div>
     <div class="card"><div class="coupon-list" id="coupons"></div></div>
   </section>
@@ -240,6 +249,8 @@ const num = v => {
 };
 let liveMode = false;
 let reportMarkdown = '';
+let lastCoupons = [];
+let packCount = null;
 
 function setStatus(kind, text){
   const el = $('status');
@@ -274,19 +285,35 @@ function renderPoints(p){
   }
 }
 
+function updateCouponMeta(){
+  const claimable = lastCoupons.filter(c => (c.couponStatus || 'CAN_GET') === 'CAN_GET').length;
+  const parts = [lastCoupons.length ? `${claimable} 张可领` : '暂无'];
+  if(packCount !== null) parts.push(`卡包 ${packCount} 张`);
+  $('coupon-meta').textContent = parts.join(' · ');
+}
+
 function renderCoupons(list){
   const box = $('coupons');
-  $('coupon-meta').textContent = list.length ? `${list.length} 张可领` : '暂无';
+  lastCoupons = list || [];
+  const claimable = lastCoupons.filter(c => (c.couponStatus || 'CAN_GET') === 'CAN_GET');
+  updateCouponMeta();
+  const btn = $('claim-all');
+  btn.disabled = claimable.length === 0 || !liveMode;
+  btn.textContent = claimable.length ? `一键领取 ${claimable.length} 张` : '已全部领取';
   if(!list.length){ box.innerHTML = '<div class="void">当前没有可领取的优惠券</div>'; return; }
-  box.innerHTML = list.map(c => `
+  box.innerHTML = list.map(c => {
+    const done = (c.couponStatus || '') !== 'CAN_GET';
+    const label = done ? '已领取' : (c.label || '可领取');
+    return `
     <div class="coupon">
-      <div class="coupon-icon">🎟️</div>
+      <div class="coupon-icon">${done ? '✅' : '🎟️'}</div>
       <div>
         <div class="coupon-name">${c.couponName}</div>
-        <div class="coupon-sub">麦麦省 · 卡包直发</div>
+        <div class="coupon-sub">麦麦省 · ${done ? '已入卡包' : '卡包直发'}</div>
       </div>
-      <span class="chip-get">${c.label || c.couponStatus || '可领取'}</span>
-    </div>`).join('');
+      <span class="${done ? 'chip-done' : 'chip-get'}">${label}</span>
+    </div>`;
+  }).join('');
 }
 
 function renderMall(list){
@@ -319,6 +346,11 @@ async function load(){
     renderPoints(points.data || points);
     renderCoupons(coupons.data || coupons);
     renderMall(mall.data || mall);
+    try{
+      const pack = await api('/api/my-coupons');
+      packCount = pack.count ?? null;
+      updateCouponMeta();
+    }catch(_){ /* 卡包统计失败不影响主流程 */ }
   }catch(e){
     liveMode = false;
     setStatus('demo', '演示数据');
@@ -329,6 +361,24 @@ async function load(){
 }
 
 $('refresh').onclick = () => { load(); toast('已刷新'); };
+
+$('claim-all').onclick = async () => {
+  const btn = $('claim-all');
+  const prev = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '领取中…';
+  try{
+    const r = await api('/api/coupons/claim', {method:'POST', body:'{}'});
+    const ok = r.successCount ?? 0;
+    const bad = r.failedCount ?? 0;
+    toast(bad ? `成功 ${ok} 张，失败 ${bad} 张` : `已领取 ${ok} 张优惠券`);
+    await load();
+  }catch(e){
+    toast('领取失败：' + (e.message || '请检查本地服务是否运行'));
+    btn.disabled = false;
+    btn.textContent = prev;
+  }
+};
 
 $('gen-report').onclick = async () => {
   const btn = $('gen-report'); btn.disabled = true; btn.textContent = '生成中…';
